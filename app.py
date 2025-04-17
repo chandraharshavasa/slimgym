@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import pywhatkit as kit
-import datetime
 
 st.set_page_config(page_title="📱 WhatsApp Tool", layout="wide")
 
@@ -117,24 +115,21 @@ if st.session_state.edit_index is not None:
             st.success("✅ Changes Saved!")
             st.rerun()
 
-# Send WhatsApp
-if st.button("📤 Send WhatsApp"):
+# Send WhatsApp - Generate message links
+if st.button("📤 Generate WhatsApp Links"):
     if not selected_indexes:
         st.warning("⚠️ Select at least one member.")
     else:
-        count = 0
+        st.subheader("📲 WhatsApp Message Links")
         for i in selected_indexes:
             person = filtered_data.iloc[i]
-            phone = person["Phone"]
+            phone = person["Phone"].replace("+", "")
             name = person["Name"]
             id_ = person["ID"]
             final_message = message.replace("{name}", name).replace("{id}", str(id_))
-            try:
-                kit.sendwhatmsg_instantly(phone, final_message, wait_time=10, tab_close=True)
-                count += 1
-            except Exception as e:
-                st.error(f"❌ Could not send to {phone}: {e}")
-        st.success(f"✅ Message sent to {count} member(s)!")
+            encoded_msg = final_message.replace(" ", "%20").replace("\n", "%0A")
+            link = f"https://wa.me/{phone}?text={encoded_msg}"
+            st.markdown(f"👉 [Message {name} on WhatsApp]({link})", unsafe_allow_html=True)
 
 # Delete All
 if st.button("🧹 Clear All Data"):
