@@ -135,3 +135,36 @@ if st.button("📤 Generate WhatsApp Links"):
 if st.button("🧹 Clear All Data"):
     st.session_state.data = pd.DataFrame(columns=["ID", "Name", "Phone"])
     st.success("🗑️ All data deleted!")
+
+# ✅ Add this block right below ⬇️
+
+# Remove duplicate IDs and preserve manual additions
+st.session_state.data.drop_duplicates("ID", keep="last", inplace=True)
+st.session_state.data.reset_index(drop=True, inplace=True)
+
+# Save Button Style Fix
+st.markdown("""
+    <style>
+        .stButton > button {
+            background-color: #25D366;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# CSV Download Option
+st.subheader("⬇️ Download Current Data")
+csv = st.session_state.data.to_csv(index=False).encode('utf-8')
+st.download_button("📥 Download CSV", data=csv, file_name='whatsapp_members.csv', mime='text/csv')
+
+# Footer
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center;'>"
+    "Made with ❤️ by Harshavasa | "
+    "<a href='https://github.com/yourgithubrepo' target='_blank'>GitHub</a>"
+    "</div>",
+    unsafe_allow_html=True
+)
+
