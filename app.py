@@ -1,9 +1,15 @@
 import streamlit as st
 import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+import time
 
+# Set up page and session state
 st.set_page_config(page_title="📱 WhatsApp Tool", layout="wide")
 
-# Session state setup
 if "data" not in st.session_state:
     st.session_state.data = pd.DataFrame(columns=["ID", "Name", "Phone"])
 if "show_add_form" not in st.session_state:
@@ -11,7 +17,7 @@ if "show_add_form" not in st.session_state:
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
 
-# Format phone
+# Format phone numbers
 def format_phone(phone):
     phone = str(phone).strip()
     if not phone.startswith("+"):
@@ -35,128 +41,58 @@ if uploaded_file:
     else:
         st.error("❌ Excel must contain ID, Name, Phone columns.")
 
-# Add new entry
-if st.button("➕ Add New"):
-    st.session_state.show_add_form = True
-
-if st.session_state.show_add_form:
-    with st.form("add_form"):
-        new_id = st.text_input("ID")
-        new_name = st.text_input("Name")
-        new_phone = st.text_input("Phone (e.g., 9876543210)")
-        submit = st.form_submit_button("Submit")
-        if submit:
-            formatted_phone = format_phone(new_phone)
-            new_row = pd.DataFrame([[new_id, new_name, formatted_phone]], columns=["ID", "Name", "Phone"])
-            st.session_state.data = pd.concat([st.session_state.data, new_row], ignore_index=True)
-            st.success("✅ Member Added!")
-            st.session_state.show_add_form = False
-
-# Search
+# Search & display data
 search_term = st.text_input("🔍 Search by ID, Name, Phone", "")
-if search_term:
-    filtered_data = st.session_state.data[
-        st.session_state.data["ID"].astype(str).str.contains(search_term, case=False, na=False) |
-        st.session_state.data["Name"].astype(str).str.contains(search_term, case=False, na=False) |
-        st.session_state.data["Phone"].astype(str).str.contains(search_term, case=False, na=False)
-    ]
-else:
-    filtered_data = st.session_state.data
+filtered_data = st.session_state.data[
+    st.session_state.data["ID"].astype(str).str.contains(search_term, case=False, na=False) |
+    st.session_state.data["Name"].astype(str).str.contains(search_term, case=False, na=False) |
+    st.session_state.data["Phone"].astype(str).str.contains(search_term, case=False, na=False)
+] if search_term else st.session_state.data
 
-# Select All
-select_all = st.checkbox("✅ Select All")
-selected_indexes = []
-
-# Message input
+# WhatsApp Message Setup
 st.subheader("💬 Message (use `{name}` and `{id}` to personalize)")
 message = st.text_area("Enter your message", "Hi {name}, your ID is {id}. Stay strong and keep going! 💪")
 
-st.subheader("👥 View & Manage Members")
-for i, row in filtered_data.iterrows():
-    col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2, 2, 2, 1, 1])
-    with col1:
-        checked = st.checkbox("", key=f"chk_{i}", value=select_all)
-        if checked:
-            selected_indexes.append(i)
-
-    with col2:
-        st.text_input("Name", value=row["Name"], key=f"name_{i}", disabled=True)
-
-    with col3:
-        st.text_input("Phone", value=row["Phone"], key=f"phone_{i}", disabled=True)
-
-    with col4:
-        st.text_input("ID", value=row["ID"], key=f"id_{i}", disabled=True)
-
-    with col5:
-        if st.button("✏️ Edit", key=f"edit_{i}"):
-            st.session_state.edit_index = i
-
-    with col6:
-        if st.button("🗑️ Delete", key=f"del_{i}"):
-            st.session_state.data.drop(index=row.name, inplace=True)
-            st.session_state.data.reset_index(drop=True, inplace=True)
-            st.rerun()
-
-# Edit section
-if st.session_state.edit_index is not None:
-    idx = st.session_state.edit_index
-    st.subheader("✏️ Edit Member")
-    with st.form("edit_form"):
-        edit_id = st.text_input("Edit ID", value=st.session_state.data.at[idx, "ID"])
-        edit_name = st.text_input("Edit Name", value=st.session_state.data.at[idx, "Name"])
-        edit_phone = st.text_input("Edit Phone", value=st.session_state.data.at[idx, "Phone"])
-        save = st.form_submit_button("Save Changes")
-        if save:
-            st.session_state.data.at[idx, "ID"] = edit_id
-            st.session_state.data.at[idx, "Name"] = edit_name
-            st.session_state.data.at[idx, "Phone"] = format_phone(edit_phone)
-            st.session_state.edit_index = None
-            st.success("✅ Changes Saved!")
-            st.rerun()
-
-# Send WhatsApp - Generate message links
-if st.button("📤 Generate WhatsApp Links"):
+# Button to send WhatsApp message via web
+if st.button("📤 Send Messages via WhatsApp Web"):
+    selected_indexes = [i for i, row in filtered_data.iterrows() if st.checkbox(f"Select {row['Name']}", key=f"select_{i}")]
     if not selected_indexes:
         st.warning("⚠️ Select at least one member.")
     else:
-        st.subheader("📲 WhatsApp Message Links")
+        st.info("🔄 Sending messages, please wait...")
+        
+        # Start Selenium WebDriver
+        options = Options()
+        options.add_argument("--headless")  # Run in headless mode
+        service = Service("path/to/chromedriver")  # Provide path to ChromeDriver
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.get("https://web.whatsapp.com/")
+        
+        # Wait for WhatsApp Web to load and scan QR code
+        st.info("🔄 Waiting for QR code scan...")
+        time.sleep(20)  # Wait for QR scan
+
         for i in selected_indexes:
             person = filtered_data.iloc[i]
             phone = person["Phone"].replace("+", "")
             name = person["Name"]
             id_ = person["ID"]
             final_message = message.replace("{name}", name).replace("{id}", str(id_))
-            encoded_msg = final_message.replace(" ", "%20").replace("\n", "%0A")
-            link = f"https://wa.me/{phone}?text={encoded_msg}"
-            st.markdown(f"👉 [Message {name} on WhatsApp]({link})", unsafe_allow_html=True)
-
-# Delete All
-if st.button("🧹 Clear All Data"):
-    st.session_state.data = pd.DataFrame(columns=["ID", "Name", "Phone"])
-    st.success("🗑️ All data deleted!")
-
-# ✅ Add this block right below ⬇️
-
-# Remove duplicate IDs and preserve manual additions
-st.session_state.data.drop_duplicates("ID", keep="last", inplace=True)
-st.session_state.data.reset_index(drop=True, inplace=True)
-
-# Save Button Style Fix
-st.markdown("""
-    <style>
-        .stButton > button {
-            background-color: #25D366;
-            color: white;
-            font-weight: bold;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# CSV Download Option
-st.subheader("⬇️ Download Current Data")
-csv = st.session_state.data.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Download CSV", data=csv, file_name='whatsapp_members.csv', mime='text/csv')
+            
+            # Open chat window with phone number
+            driver.get(f"https://web.whatsapp.com/send?phone={phone}&text={final_message}")
+            time.sleep(5)  # Allow time for the chat to load
+            
+            # Find send button and click it
+            try:
+                send_button = driver.find_element(By.XPATH, "//span[@data-icon='send']")
+                send_button.click()
+                time.sleep(2)
+                st.success(f"✅ Message sent to {name}")
+            except Exception as e:
+                st.error(f"❌ Error sending message to {name}: {str(e)}")
+        
+        driver.quit()
 
 # Footer
 st.markdown("---")
@@ -167,4 +103,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
